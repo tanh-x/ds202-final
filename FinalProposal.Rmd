@@ -71,8 +71,8 @@ categorical_summaries
 1. What types of businesses are more common? Is there a trend over time?
 2. Are there any time periods with more or less active businesses? Why?
 3. Can we integrate geographic data into the dataset? Do businesses gravitate towards certain regions? Why?
-4. ...
-5. ...
+4. How is the distribution of different business types evolving over time within each council district? Are new industries emerging in specific districts?
+5. Are there seasonal or annual trends in the number of new business registrations, and can these be linked to economic cycles or local events?
 ## Steps:
 1. ...
 
