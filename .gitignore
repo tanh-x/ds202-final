@@ -1,0 +1,13 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# Data file
+Listing_of_Active_Businesses.csv
+
+# Cache folder
+*_cache/
+
+# JetBrains IDE
+.idea

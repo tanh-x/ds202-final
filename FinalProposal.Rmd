@@ -1,6 +1,6 @@
 ---
 title: "Final Proposal"
-author: "Thanh Mai, Brian Xicon"
+author: "Dev Desai, Thanh Mai, Shobhit Sarkar, Brian Xicon"
 output: html_document
 date: "2023-11-13"
 ---
@@ -9,22 +9,34 @@ date: "2023-11-13"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Description:
-The dataset we are using is a list of all active businesses from the City of Los Angeles. The fields include the account number, business name, DBA name, street address, city, zip code, location description, mailing address, mailing city, mailing zip code, primary NAICS description (what the company does), NAICS (code of what the company does), council district, location start date, location end date, and lastly the actual location as coordinates. It has more than 580000 companies in this dataset. We got this dataset from catalog.data.gov
 ```{r}
+library(tidyverse)
+```
+
+# Description:
+The dataset we are using is a list of all active businesses from the City of Los Angeles. The fields include the account number, business name, DBA name, street address, city, zip code, location description, mailing address, mailing city, mailing zip code, primary NAICS description (what the company does), NAICS (code of what the company does), council district, location start date, location end date, and lastly the actual location as coordinates. It has more than 580000 companies in this dataset. We got this dataset from [https://catalog.data.gov/dataset/listing-of-active-businesses]
+
+```{r, cache=TRUE}
+# Download the csv from the source, if not already on disk.
+# The file is 125 MB, which might take up to a minute to download.
+
+if (!file.exists("Listing_of_Active_Businesses.csv")) {
+  # URL is a CDN link, which is served by https://catalog.data.gov/dataset/listing-of-active-businesses
+  url <- "https://data.lacity.org/api/views/6rrh-rzua/rows.csv?accessType=DOWNLOAD"
+  download.file(url, "Listing_of_Active_Businesses.csv", mode = "wb")
+}
 businesses <- read.csv("Listing_of_Active_Businesses.csv")
+cat("Number of rows in data: ", nrow(businesses), ". Expected 582k rows", sep="")
 ```
 
 
 # First Data Cleaning Steps:
 ```{r}
-library(tidyverse)
-
-#Converting dates to Date objects
+# Converting dates to Date objects
 businesses$LOCATION.START.DATE <- as.Date(businesses$LOCATION.START.DATE, format = "%m/%d/%Y")
 businesses$LOCATION.END.DATE <- as.Date(businesses$LOCATION.END.DATE, format = "%m/%d/%Y")
 
-#Removing duplicate rows
+# Removing duplicate rows
 businesses <- businesses %>% distinct()
 
 head(businesses)
@@ -33,15 +45,17 @@ head(businesses)
 
 # Marginal Summaries:
 ```{r}
-#Some basic numerical marginal summaries
+# Some basic numerical marginal summaries
 numeric_summaries <- businesses %>%
   summarise(
     StartDateEarliest = min(LOCATION.START.DATE, na.rm = TRUE),
     StartDateLatest = max(LOCATION.START.DATE, na.rm = TRUE),
   )
 numeric_summaries
+```
 
-#Some basic categorical marginal summaries
+```{r}
+# Some basic categorical marginal summaries
 categorical_summaries <- businesses %>%
   filter(!is.na(PRIMARY.NAICS.DESCRIPTION) & PRIMARY.NAICS.DESCRIPTION != "") %>%
   summarise(
@@ -50,5 +64,21 @@ categorical_summaries <- businesses %>%
   )
 
 categorical_summaries
+```
+
+# Exploration plan:
+## Potential research questions:
+1. What types of businesses are more common? Is there a trend over time?
+2. Are there any time periods with more or less active businesses? Why?
+3. Can we integrate geographic data into the dataset? Do businesses gravitate towards certain regions? Why?
+4. ...
+5. ...
+## Steps:
+1. ...
+
+```{r}
+# Sample 1000 random businesses to reduce computation time.
+# Use during development, but switch back to the full dataset when done.
+businesses_trunc <- head(businesses, 1000)
 ```
 
