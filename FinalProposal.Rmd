@@ -74,7 +74,14 @@ categorical_summaries
 4. How is the distribution of different business types evolving over time within each council district? Are new industries emerging in specific districts?
 5. Are there seasonal or annual trends in the number of new business registrations, and can these be linked to economic cycles or local events?
 ## Steps:
-1. ...
+- Do data cleaning, especially on the NAICS code and description (business type/industry).
+- Plot various variables across time, both linearly and seasonally.
+- Find additional economic data (either nationally or locally), and find correlations.
+- Get additional geographic data around the Los Angeles metropolitan area, for instance, population distribution by district.
+- Plot the distribution of businesses on a map, perhaps also create a choropleth (if only district data) or heatmap (if more granular data is available) to show tendencies in distribution.
+- Find correlations between variables in the district data and what types of businesses are more active in those areas.
+- For any given correlation that is of research interest, can we predict business activity using that given set of variables? Try predictions using both regression methods and machine learning techniques.
+- Does our prediction/hypothesis make sense? Can we prove it, perhaps by looking at other areas or on a nation-wide scale?
 
 ```{r}
 # Sample 1000 random businesses to reduce computation time.
