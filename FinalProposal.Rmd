@@ -11,6 +11,8 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 library(tidyverse)
+#install.packages("revgeo")
+#library(revgeo)
 ```
 
 # Description:
@@ -26,11 +28,12 @@ if (!file.exists("Listing_of_Active_Businesses.csv")) {
   download.file(url, "Listing_of_Active_Businesses.csv", mode = "wb")
 }
 businesses <- read.csv("Listing_of_Active_Businesses.csv")
+head(businesses)
 cat("Number of rows in data: ", nrow(businesses), ". Expected 582k rows", sep="")
 ```
 
 
-# First Data Cleaning Steps:
+# Data Cleaning Steps:
 ```{r}
 # Converting dates to Date objects
 businesses$LOCATION.START.DATE <- as.Date(businesses$LOCATION.START.DATE, format = "%m/%d/%Y")
@@ -38,6 +41,26 @@ businesses$LOCATION.END.DATE <- as.Date(businesses$LOCATION.END.DATE, format = "
 
 # Removing duplicate rows
 businesses <- businesses %>% distinct()
+
+#Converting PRIMARY.NAICS.DESCRIPTION to Factor
+businesses$PRIMARY.NAICS.DESCRIPTION <- as.factor(businesses$PRIMARY.NAICS.DESCRIPTION)
+
+#Split Up Location to Longitude & Latitude
+businesses <- businesses %>%
+  separate(`LOCATION`,
+           into = c("Latitude", "Longitude"),
+           sep = ', ') %>%
+  mutate(Latitude = parse_number(Latitude),
+         Longitude = parse_number(Longitude))
+
+#Filters to just the Continental U.S.
+businesses <- businesses %>%
+  filter(
+    Latitude >= 24.396308 & Latitude <= 49.384358,
+    Longitude >= -125.001650 & Longitude <= -66.934570
+  )
+
+#businesses$State <- reverse_geocode(businesses$Longitude, businesses$Latitude, output = "more", source = "osm")
 
 head(businesses)
 ```
@@ -88,4 +111,21 @@ categorical_summaries
 # Use during development, but switch back to the full dataset when done.
 businesses_trunc <- head(businesses, 1000)
 ```
+
+### Can we integrate geographic data into the dataset? Do businesses gravitate towards certain regions? Why? (Brian Xicon)
+```{r}
+valid_locations <- businesses %>%
+  filter(!is.na(Latitude) & !is.na(Longitude))
+
+state <- map_data("state")
+
+
+ggplot() +
+  geom_polygon(data = state, aes(x = long, y = lat, group = group), fill = NA, color = "black") + 
+  geom_point(data = valid_locations, aes(x = Longitude, y = Latitude), color = "blue", size = 1) +    
+  coord_fixed(1.3) +  # Set aspect ratio
+  ggtitle("Business Locations In Continental United States")
+```
+
+
 
