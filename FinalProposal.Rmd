@@ -11,8 +11,8 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 library(tidyverse)
-#install.packages("revgeo")
-#library(revgeo)
+install.packages("ggmap")
+library(ggmap)
 ```
 
 # Description:
@@ -30,6 +30,9 @@ if (!file.exists("Listing_of_Active_Businesses.csv")) {
 businesses <- read.csv("Listing_of_Active_Businesses.csv")
 head(businesses)
 cat("Number of rows in data: ", nrow(businesses), ". Expected 582k rows", sep="")
+
+zips <- read.csv("uszips.csv")
+head(zips)
 ```
 
 
@@ -60,11 +63,8 @@ businesses <- businesses %>%
     Longitude >= -125.001650 & Longitude <= -66.934570
   )
 
-#businesses$State <- reverse_geocode(businesses$Longitude, businesses$Latitude, output = "more", source = "osm")
-
 head(businesses)
 ```
-
 
 # Marginal Summaries:
 ```{r}
@@ -114,18 +114,118 @@ businesses_trunc <- head(businesses, 1000)
 
 ### Can we integrate geographic data into the dataset? Do businesses gravitate towards certain regions? Why? (Brian Xicon)
 ```{r}
+#Adds simplified ZIP code to be used with the zips dataset.
+businesses <- businesses %>% 
+  mutate(ZIP_CODE_SHORT = str_split(ZIP.CODE, "-", simplify = TRUE)[, 1],
+         ZIP_CODE_SHORT = as.integer(ZIP_CODE_SHORT))
+
+#Selects the only columns needed to merge with businesses.
+zips_simplified <- zips %>% 
+  select(zip, state_name)
+
+#Joins the zips columns to businesses
+businesses <- businesses %>% 
+  left_join(zips_simplified, by = c("ZIP_CODE_SHORT" = "zip"))
+
+#head(businesses)
+
+#Picks the valid locations
 valid_locations <- businesses %>%
-  filter(!is.na(Latitude) & !is.na(Longitude))
+  filter(!is.na(Latitude) & !is.na(Longitude) & !is.na(state_name))
+
+head(valid_locations)
 
 state <- map_data("state")
-
-
+```
+# Graph of Companies in Continental United States With Color Corresponding To NAICS (Brian Xicon)
+```{r}
 ggplot() +
   geom_polygon(data = state, aes(x = long, y = lat, group = group), fill = NA, color = "black") + 
-  geom_point(data = valid_locations, aes(x = Longitude, y = Latitude), color = "blue", size = 1) +    
+  geom_point(data = valid_locations, aes(x = Longitude, y = Latitude, color = PRIMARY.NAICS.DESCRIPTION), size = 1) +    
   coord_fixed(1.3) +  # Set aspect ratio
-  ggtitle("Business Locations In Continental United States")
+  ggtitle("Business Locations In Continental United States") +
+  labs(color = "State") +
+  theme(legend.position = "none")
+```
+# Top 10 States by Number of Businesses (According to Dataset) (Brian Xicon)
+```{r}
+state_business_counts <- valid_locations %>%
+  group_by(state_name) %>%
+  summarise(business_count = n()) %>%
+  arrange(desc(business_count))
+
+top_states <- state_business_counts %>%
+  top_n(10, business_count)
+
+top_states
+
+ggplot(top_states, aes(x = reorder(state_name, business_count), y = business_count)) +
+  geom_bar(stat = "identity") +
+  xlab("State") +
+  ylab("Number of Businesses") +
+  ggtitle("Top 10 States by Number of Businesses") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+top_states_no_cali <- state_business_counts %>%
+  filter(state_name != "California") %>%
+  top_n(10, business_count)
+
+ggplot(top_states_no_cali, aes(x = reorder(state_name, business_count), y = business_count)) +
+  geom_bar(stat = "identity") +
+  xlab("State") +
+  ylab("Number of Businesses") +
+  ggtitle("Top 10 States by Number of Businesses") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+#Since this is a California based dataset it will be easy to notice just how many more companies California has compared to the other states. The bar graph shown shows just how large of a margin it is to go from 1st place (California) to 2nd place (New York). Removing California from the bar graph we can then see the margins are much less drastic compared to the other states.
 ```
 
+# Stacked Barchart Comparing NAICS As Well (Brian Xicon)
+```{r}
+#Count businesses by state and NAICS, excluding California
+state_naics_counts <- valid_locations %>%
+  filter(state_name != "California") %>%
+  group_by(state_name, PRIMARY.NAICS.DESCRIPTION) %>%
+  summarise(business_count = n()) %>%
+  ungroup()
 
+#Find top 10 states
+top_states <- state_naics_counts %>%
+  group_by(state_name) %>%
+  summarise(total_business_count = sum(business_count)) %>%
+  arrange(desc(total_business_count)) %>%
+  top_n(10, total_business_count) %>%
+  select(state_name)
+
+#Filter for top states
+top_state_naics_counts <- state_naics_counts %>%
+  filter(state_name %in% top_states$state_name)
+
+#Find top 10 NAICS descriptions
+top_naics <- top_state_naics_counts %>%
+  group_by(PRIMARY.NAICS.DESCRIPTION) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count)) %>%
+  top_n(10, count) %>%
+  pull(PRIMARY.NAICS.DESCRIPTION)
+
+#Filter for top NAICS descriptions
+final_data <- top_state_naics_counts %>%
+  filter(PRIMARY.NAICS.DESCRIPTION %in% top_naics)
+
+#Make distinct palette
+my_palette <- c("#e6194B", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4",
+                "#46f0f0", "#f032e6", "#bcf60c", "#fabebe", "#008080", "#e6beff",
+                "#9a6324", "#fffac8", "#800000", "#aaffc3", "#808000", "#ffd8b1",
+                "#000075", "#808080", "#000000", "#ffd700", "#4b0082", "#800080")
+
+#Plot stacked barchart
+ggplot(final_data, aes(x = reorder(state_name, business_count), y = business_count, fill = PRIMARY.NAICS.DESCRIPTION)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = my_palette, name = "NAICS Description") +
+  xlab("State") +
+  ylab("Number of Businesses") +
+  ggtitle("Top 10 States by Number of Businesses by NAICS (Excluding California)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "bottom")
+```
 
