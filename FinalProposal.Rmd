@@ -95,11 +95,6 @@ categorical_summaries
 
 
 ```{r}
-library(ggplot2)
-library(dplyr)
-library(readr)
-library(lubridate)
-
 
 # Convert the 'LOCATION.START.DATE' to a Date object and extract the year
 business_data <- business_data %>%
