@@ -100,7 +100,6 @@ library(dplyr)
 library(readr)
 library(lubridate)
 
-# Assume 'business_data' has been read from your data source as before
 
 # Convert the 'LOCATION.START.DATE' to a Date object and extract the year
 business_data <- business_data %>%
@@ -119,10 +118,9 @@ business_trends <- business_data %>%
 top_business_types <- business_trends %>%
   group_by(Business_Type) %>%
   summarise(Total_Count = sum(Count), .groups = 'drop') %>%
-  arrange(desc(Total_Count)) %>%  # Sort in descending order of Total_Count
-  slice(2:11) %>%  # Select the rows corresponding to ranks 2 to 11
-  pull(Business_Type)  # Extract just the Business_Type column
-# Convert Business_Type to a factor with levels ordered by Total_Count
+  arrange(desc(Total_Count)) %>%
+  slice(2:11) %>%  
+  pull(Business_Type)  
 business_trends$Business_Type <- factor(business_trends$Business_Type, levels = top_business_types)
 
 # Filter the trends data to only include the top 10 business types
@@ -132,9 +130,7 @@ filtered_trends <- business_trends %>%
 # Create a line plot with colors for different business types
 library(ggplot2)
 
-# Your previous data processing steps here...
 
-# Create a line plot with colors for different business types
 plot <- ggplot(filtered_trends, aes(x = Year, y = Count, color = Business_Type)) +
   geom_line() + # Use geom_line for line charts
   labs(title = "Trend of Top 10 Business Types Since 2000",
@@ -142,17 +138,16 @@ plot <- ggplot(filtered_trends, aes(x = Year, y = Count, color = Business_Type))
        y = "Number of Businesses") +
   theme_minimal() +
   theme(
-    axis.text.x = element_text(angle = 90, hjust = 1, size = 8), # Set size for axis text
-    legend.position = "right", # Position the legend to the right
-    legend.text = element_text(size = 6), # Set smaller size for legend text
-    legend.title = element_text(size = 8), # Set smaller size for legend title
-    legend.key.size = unit(0.5, "cm"), # Set smaller size for legend keys
-    legend.margin = margin(t = 0, r = 0, b = 0, l = 0), # Remove margin around legend
-    plot.margin = margin(t = 1, r = 1, b = 1, l = 1, unit = "cm") # Adjust plot margins if needed
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 8), # 
+    legend.position = "right", 
+    legend.text = element_text(size = 6), 
+    legend.title = element_text(size = 8),
+    legend.key.size = unit(0.5, "cm"),
+    legend.margin = margin(t = 0, r = 0, b = 0, l = 0), 
+    plot.margin = margin(t = 1, r = 1, b = 1, l = 1, unit = "cm") 
   ) +
-  guides(color = guide_legend(title = "Business Type")) # Add a legend for business types
+  guides(color = guide_legend(title = "Business Type")) 
 
-# Display the plot
 print(plot)
 
 ```
