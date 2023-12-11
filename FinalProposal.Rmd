@@ -290,6 +290,25 @@ ggplot(final_data, aes(x = reorder(state_name, business_count), y = business_cou
   theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "bottom")
 ```
 
+# Top 10 NAICS Descriptions per State (Brian Xicon)
+```{r}
+#Groups State Name & NAICS Description Together To Arrange
+naics_counts_per_state <- valid_locations %>%
+  group_by(state_name, NAICS_Description = PRIMARY.NAICS.DESCRIPTION) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  arrange(desc(Count))
+
+#Grabs Top 10 NAICS Per State
+top_naics_per_state <- naics_counts_per_state %>%
+  group_by(state_name) %>%
+  slice_max(n = 10, order_by = Count) %>%
+  ungroup() %>%
+  arrange(state_name, desc(Count))
+
+top_naics_per_state
+```
+
+
 4. How is the distribution of different business types evolving over time within each council district? Are new industries emerging in specific districts? (Dev Desai)
 ```{r}
 # Filter out rows with missing or zero council district values
