@@ -6,7 +6,7 @@ date: "2023-11-13"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 ```
 
 ```{r}
@@ -65,6 +65,8 @@ businesses <- businesses %>%
 	Latitude >= 24.396308 & Latitude <= 49.384358,
 	Longitude >= -125.001650 & Longitude <= -66.934570
   )
+
+business_data <- businesses #DELETE LATER
 
 head(businesses)
 ```
@@ -255,6 +257,7 @@ ggplot(sector_trends %>% filter(sector %in% top_10_sectors), aes(x = start_year,
   guides(color = guide_legend(title = "Sector"))
 ```
 
+# Can we integrate geographic data into the dataset? Do businesses gravitate towards certain regions? Why? (Brian Xicon)
 This revised graph provides a bigger picture overview of business trends and removes unnecessary granularity that wasn't strictly necessary for the visualization. The trend mirrors the findings above, as the graphs aren't fundamentally different.
 
 ### Can we integrate geographic data into the dataset? Do businesses gravitate towards certain regions?
@@ -282,11 +285,9 @@ valid_locations <- businesses %>%
 		   !is.na(Longitude) &
 		   !is.na(state_name))
 
-head(valid_locations)
-
 state <- map_data("state")
 ```
-### Graph of Companies in Continental United States With Color Corresponding To NAICS
+### Graph of Companies in Continental United States With Color Corresponding To NAICS (Brian Xicon)
 ```{r}
 ggplot() +
   geom_polygon(data = state, aes(x = long, y = lat, group = group), fill = NA, color = "black") +
@@ -430,8 +431,50 @@ ggplot(final_data, aes(x = reorder(state_name, business_count), y = business_cou
   xlab("State") +
   ylab("Number of Businesses") +
   ggtitle("Top 10 States by Number of Businesses by NAICS (Excluding California)") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "bottom")
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "bottom",legend.box.margin = margin(6, 6, 6, 6))
 ```
+
+**About the chart:**
+This stacked bar chart showcases the top ten states by business count, with California intentionally omitted due to its outsized presence. Each segment within the bars corresponds to different industry sectors, as classified by the North American Industry Classification System (NAICS). The design of this chart aims to neatly quantify the business landscape and to highlight the prevailing industries within each selected state. To maintain clarity, the focus is kept on the ten most business-dense states. The visualization clearly indicates that New York, Texas, and Illinois lead the list when setting California aside.
+
+### Top 10 NAICS Descriptions per State (Brian Xicon)
+```{r}
+#Groups State Name & NAICS Description Together To Arrange
+naics_counts_per_state <- valid_locations %>%
+  filter(PRIMARY.NAICS.DESCRIPTION != "", !is.na(PRIMARY.NAICS.DESCRIPTION)) %>%  # Exclude blank/null NAICS descriptions
+  group_by(state_name, NAICS_Description = PRIMARY.NAICS.DESCRIPTION) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  arrange(desc(Count))
+
+# Grabs Top 10 NAICS Per State
+top_naics_per_state <- naics_counts_per_state %>%
+  group_by(state_name) %>%
+  slice_max(n = 10, order_by = Count) %>%
+  ungroup() %>%
+  arrange(state_name, desc(Count))
+
+top_naics_per_state
+```
+
+**About the set:**
+The dataset outlines the top ten NAICS descriptions per state based on the number of businesses, including any ties for tenth place. This detailed categorization is an excellent resource for analyzing the distribution of companies across states, highlighting the leading industries in each one. It sets the stage for targeted research into the specific business environments of individual states, providing a clear picture of which sectors are most prominent.
+
+```{r}
+iowa_naics <- top_naics_per_state %>%
+  filter(state_name == "Iowa")
+
+ggplot(iowa_naics, aes(x = reorder(NAICS_Description, Count), y = Count, fill = NAICS_Description)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Top NAICS in Iowa by Count",
+       x = "NAICS Description",
+       y = "Count") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        legend.position = "none") +
+  coord_flip()
+```
+
+**About the chart:**
+The bar chart provides a quantitative breakdown of Iowa's leading industries as defined by the NAICS. With each bar, the chart offers a visual representation of the number of businesses within each NAICS category, making it possible to discover at a glance which sectors are the most prominent in the state.Notably, the professional, scientific, and technical services sector leads the way, with sectors dealing in miscellaneous nondurable and durable goods following closely. This chart is especially useful for anyone keen on understanding the business composition of Iowa. It's also a valuable resource for investors, as it highlights which industries are most widespread, potentially shedding light on areas of profitability and investment opportunity. It's worth noting, however, that this data might not fully represent the local Iowa business environment since it's based on companies headquartered in California.
 
 The distribution of businesses differentiated by sector mostly stays the same between states, except for some noteworthy observations:
 
