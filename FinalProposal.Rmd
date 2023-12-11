@@ -6,12 +6,12 @@ date: "2023-11-13"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 ```
 
 ```{r}
 library(tidyverse)
-install.packages("ggmap")
+#install.packages("ggmap")
 library(ggmap)
 ```
 
@@ -62,6 +62,8 @@ businesses <- businesses %>%
     Latitude >= 24.396308 & Latitude <= 49.384358,
     Longitude >= -125.001650 & Longitude <= -66.934570
   )
+
+business_data <- businesses #DELETE LATER
 
 head(businesses)
 ```
@@ -173,7 +175,7 @@ Note: I decided to include the data from the year 2000 and only of the top 10 in
 businesses_trunc <- head(businesses, 1000)
 ```
 
-### Can we integrate geographic data into the dataset? Do businesses gravitate towards certain regions? Why? (Brian Xicon)
+# Can we integrate geographic data into the dataset? Do businesses gravitate towards certain regions? Why? (Brian Xicon)
 ```{r}
 #Adds simplified ZIP code to be used with the zips dataset.
 businesses <- businesses %>% 
@@ -194,11 +196,9 @@ businesses <- businesses %>%
 valid_locations <- businesses %>%
   filter(!is.na(Latitude) & !is.na(Longitude) & !is.na(state_name))
 
-head(valid_locations)
-
 state <- map_data("state")
 ```
-# Graph of Companies in Continental United States With Color Corresponding To NAICS (Brian Xicon)
+### Graph of Companies in Continental United States With Color Corresponding To NAICS (Brian Xicon)
 ```{r}
 ggplot() +
   geom_polygon(data = state, aes(x = long, y = lat, group = group), fill = NA, color = "black") + 
@@ -208,40 +208,11 @@ ggplot() +
   labs(color = "State") +
   theme(legend.position = "none")
 ```
-# Top 10 States by Number of Businesses (According to Dataset) (Brian Xicon)
-```{r}
-state_business_counts <- valid_locations %>%
-  group_by(state_name) %>%
-  summarise(business_count = n()) %>%
-  arrange(desc(business_count))
 
-top_states <- state_business_counts %>%
-  top_n(10, business_count)
+**About the graph:**
+This graph visually represents the distribution of companies across the continental United States, with each company's location plotted based on its latitude and longitude. The data points in the graph are color-coordinated according to the North American Industry Classification System (NAICS), which provides a clear picture of the industry diversity within each state.A major observation from this graph is the apparent density of companies in certain areas, illustrating how business activity is concentrated in specific regions. However, it's important to note a limitation in the dataset: the majority of the data originates from companies located in or verified by the city of Los Angeles. This leads to a skewed representation, especially because the dataset disproportionately represents companies based in California, even if their primary operations are nationwide.
 
-top_states
-
-ggplot(top_states, aes(x = reorder(state_name, business_count), y = business_count)) +
-  geom_bar(stat = "identity") +
-  xlab("State") +
-  ylab("Number of Businesses") +
-  ggtitle("Top 10 States by Number of Businesses") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-top_states_no_cali <- state_business_counts %>%
-  filter(state_name != "California") %>%
-  top_n(10, business_count)
-
-ggplot(top_states_no_cali, aes(x = reorder(state_name, business_count), y = business_count)) +
-  geom_bar(stat = "identity") +
-  xlab("State") +
-  ylab("Number of Businesses") +
-  ggtitle("Top 10 States by Number of Businesses") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-#Since this is a California based dataset it will be easy to notice just how many more companies California has compared to the other states. The bar graph shown shows just how large of a margin it is to go from 1st place (California) to 2nd place (New York). Removing California from the bar graph we can then see the margins are much less drastic compared to the other states.
-```
-
-# Stacked Barchart Comparing NAICS As Well (Brian Xicon)
+### Stacked Barchart Comparing NAICS As Well (Brian Xicon)
 ```{r}
 #Count businesses by state and NAICS, excluding California
 state_naics_counts <- valid_locations %>%
@@ -287,18 +258,22 @@ ggplot(final_data, aes(x = reorder(state_name, business_count), y = business_cou
   xlab("State") +
   ylab("Number of Businesses") +
   ggtitle("Top 10 States by Number of Businesses by NAICS (Excluding California)") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "bottom")
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "bottom",legend.box.margin = margin(6, 6, 6, 6))
 ```
 
-# Top 10 NAICS Descriptions per State (Brian Xicon)
+**About the chart:**
+This stacked bar chart showcases the top ten states by business count, with California intentionally omitted due to its outsized presence. Each segment within the bars corresponds to different industry sectors, as classified by the North American Industry Classification System (NAICS). The design of this chart aims to neatly quantify the business landscape and to highlight the prevailing industries within each selected state. To maintain clarity, the focus is kept on the ten most business-dense states. The visualization clearly indicates that New York, Texas, and Illinois lead the list when setting California aside.
+
+### Top 10 NAICS Descriptions per State (Brian Xicon)
 ```{r}
 #Groups State Name & NAICS Description Together To Arrange
 naics_counts_per_state <- valid_locations %>%
+  filter(PRIMARY.NAICS.DESCRIPTION != "", !is.na(PRIMARY.NAICS.DESCRIPTION)) %>%  # Exclude blank/null NAICS descriptions
   group_by(state_name, NAICS_Description = PRIMARY.NAICS.DESCRIPTION) %>%
   summarise(Count = n(), .groups = 'drop') %>%
   arrange(desc(Count))
 
-#Grabs Top 10 NAICS Per State
+# Grabs Top 10 NAICS Per State
 top_naics_per_state <- naics_counts_per_state %>%
   group_by(state_name) %>%
   slice_max(n = 10, order_by = Count) %>%
@@ -308,6 +283,25 @@ top_naics_per_state <- naics_counts_per_state %>%
 top_naics_per_state
 ```
 
+**About the set:**
+The dataset outlines the top ten NAICS descriptions per state based on the number of businesses, including any ties for tenth place. This detailed categorization is an excellent resource for analyzing the distribution of companies across states, highlighting the leading industries in each one. It sets the stage for targeted research into the specific business environments of individual states, providing a clear picture of which sectors are most prominent.
+
+```{r}
+iowa_naics <- top_naics_per_state %>%
+  filter(state_name == "Iowa")
+
+ggplot(iowa_naics, aes(x = reorder(NAICS_Description, Count), y = Count, fill = NAICS_Description)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Top NAICS in Iowa by Count",
+       x = "NAICS Description",
+       y = "Count") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        legend.position = "none") +
+  coord_flip()
+```
+
+**About the chart:**
+The bar chart provides a quantitative breakdown of Iowa's leading industries as defined by the NAICS. With each bar, the chart offers a visual representation of the number of businesses within each NAICS category, making it possible to discover at a glance which sectors are the most prominent in the state.Notably, the professional, scientific, and technical services sector leads the way, with sectors dealing in miscellaneous nondurable and durable goods following closely. This chart is especially useful for anyone keen on understanding the business composition of Iowa. It's also a valuable resource for investors, as it highlights which industries are most widespread, potentially shedding light on areas of profitability and investment opportunity. It's worth noting, however, that this data might not fully represent the local Iowa business environment since it's based on companies headquartered in California.
 
 4. How is the distribution of different business types evolving over time within each council district? Are new industries emerging in specific districts? (Dev Desai)
 ```{r}
