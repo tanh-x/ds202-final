@@ -92,10 +92,16 @@ categorical_summaries <- businesses %>%
 categorical_summaries
 ```
 
-# Exploration plan:
-## Potential research questions:
-1. What types of businesses are more common? Is there a trend over time?
+## What types of businesses are more common? Is there a trend over time?
+https://www.census.gov/naics/
+>The North American Industry Classification System (NAICS) is the standard used by Federal statistical agencies in classifying business establishments for the purpose of collecting, analyzing, and publishing statistical data related to the U.S. business economy.
 
+Further analysis and understanding of business types can reveal insightful patterns in consumer behavior, economic trends, technological development, etc. The NAICS code is given by the `NAICS` column in our dataset, in which there are nearly 300 unique categories of businesses:
+```{r}
+length(unique(businesses$NAICS))
+```
+
+Let's see which industries have a larger number of businesses over time:
 
 ```{r}
 
@@ -149,20 +155,111 @@ plot <- ggplot(filtered_trends, aes(x = Year, y = Count, color = Business_Type))
 print(plot)
 
 ```
+
 **About the graph:**
-a. As we can see from the graph, there is a peak in all the different businesses around the year 2015 which might be an indication of a flourishing economy.
-b. However, after the year 2015, there is a sharp decline in the number of businesses which might indicate a bad economic situation or a saturation of industries (or the COVID -19 pandemic).
-c. Janitorial services shows the most steady behaviour while the most volatility is shown by the industries in all other personal services.
 
-Note: I decided to include the data from the year 2000 and only of the top 10 industries. Or else, the graph seems to be very difficult to read and understand.
+* As we can see from the graph, there is a peak in all the different businesses around the year 2015 which might be an indication of a flourishing economy.
+* However, after the year 2015, there is a sharp decline in the number of businesses which might indicate a bad economic situation or a saturation of industries (or the COVID -19 pandemic).
+* Janitorial services shows the most steady behaviour while the most volatility is shown by the industries in all other personal services.
 
+The graph only shows the top 10 business types, since we have over 300 different types of businesses. This is too many to do visualize and analysis on, fortunately, the first two digits of the code tells us which one of the 21 broader categories (industry sectors or "sectors") this code belongs to. This information can be found at https://www.census.gov/naics/?58967?yearbck=2022. By using the web browser's developer tools, we can inspect the network activity and see that a JSON containing the table is served from https://www.census.gov/naics/resources/js/data/naics-sector-descriptions.json. We can fetch from this endpoint and load it into R:
 ```{r}
-# Sample 1000 random businesses to reduce computation time.
-# Use during development, but switch back to the full dataset when done.
-businesses_trunc <- head(businesses, 1000)
+response <- GET("https://www.census.gov/naics/resources/js/data/naics-sector-descriptions.json")
+content <- content(response, "text", encoding = "UTF-8")
+json_data <- fromJSON(content)
+
+table_rows <- json_data$naicsRef$table$tableRow
+
+sector_map <- setNames(sapply(table_rows, function(row) row$sectorDescription),
+					   sapply(table_rows, function(row) row$sectorCode))
+
+sector_map
 ```
 
-### Can we integrate geographic data into the dataset? Do businesses gravitate towards certain regions? (Brian Xicon)
+Currently, the raw data has ranges (e.g. 31-33) in them. We can rectify this by finding ranges, then replacing them with multiple entries for each number in the range.
+```{r}
+sector_map_tmp <- list()
+for (code in names(sector_map)) {
+	if (grepl("-", code)) {
+		range <- as.numeric(unlist(strsplit(code, "-")))
+		for (i in range[1]:range[2]) {
+			sector_map_tmp[[i]] <- sector_map[[code]]
+		}
+	} else {
+		sector_map_tmp[[as.integer(code)]] <- sector_map[[code]]
+	}
+}
+
+sector_map <- as.list(sector_map_tmp)
+```
+
+Then, we can now categorize businesses by their broader `sector`.
+```{r}
+businesses$sector <- sapply(businesses$NAICS, function(x) sector_map[x %/% 10000])
+businesses$sector <- as.character(businesses$sector)
+businesses$sector[businesses$sector == "NULL"] <- NA
+```
+
+Let's see the size of each sector by number of active businesses
+
+```{r}
+
+ggplot(businesses$sector %>%
+		 unlist %>%
+		 table %>%
+		 as.data.frame, aes(x = reorder(`.`, Freq), y = Freq)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  xlab("Sector") +
+  ylab("Count") +
+  ggtitle("Counts of Business Sectors")
+
+```
+
+Businesses pertaining to the real estate and property sector seems to have the most active businesses; closely followed by professional, scientific and technical services, with over 50000 registered businesses each.
+
+And we can see the same time series graph again, with sectors instead of the narrower categorization of business subtypes:
+```{r}
+businesses$start_year <- year(as.Date(businesses$LOCATION.START.DATE, format = "%m/%d/%Y"))
+sector_trends <- businesses %>%
+  filter(sector != "NULL") %>%
+  group_by(start_year, sector) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  ungroup() %>%
+  drop_na() %>%
+  arrange(start_year)
+
+top_10_sectors <- (sector_trends %>%
+  group_by(sector) %>%
+  summarize(total = sum(Count)) %>%
+  arrange(desc(total)) %>%
+  head(10)
+)$sector
+
+ggplot(sector_trends %>% filter(sector %in% top_10_sectors), aes(x = start_year, y = Count, color = sector)) +
+  geom_line() +
+  labs(title = "Trend of Top 10 Business Sectors Since 2000",
+	   x = "Year",
+	   y = "Number of Businesses") +
+  theme_minimal() +
+  theme(
+	axis.text.x = element_text(angle = 90, hjust = 1, size = 8), #
+	legend.position = "right",
+	legend.text = element_text(size = 6),
+	legend.title = element_text(size = 8),
+	legend.key.size = unit(0.5, "cm"),
+	legend.margin = margin(t = 0, r = 0, b = 0, l = 0),
+	plot.margin = margin(t = 1, r = 1, b = 1, l = 1, unit = "cm")
+  ) +
+  xlim(2000, 2025) +
+  guides(color = guide_legend(title = "Sector"))
+```
+
+This revised graph provides a bigger picture overview of business trends and removes unnecessary granularity that wasn't strictly necessary for the visualization. The trend mirrors the findings above, as the graphs aren't fundamentally different.
+
+### Can we integrate geographic data into the dataset? Do businesses gravitate towards certain regions?
+The zip code for each business is given by the `ZIP.CODE` column. We can extract this and use it in conjunction with a zip code database for additional geographic information. For visualization purposes, we can also use the `Longitude` and `Latitude` columns, which has finer precision, but lacks geopolitical boundaries.
+
 ```{r}
 #Adds simplified ZIP code to be used with the zips dataset.
 businesses <- businesses %>%
@@ -189,17 +286,70 @@ head(valid_locations)
 
 state <- map_data("state")
 ```
-### Graph of Companies in Continental United States With Color Corresponding To NAICS (Brian Xicon)
+### Graph of Companies in Continental United States With Color Corresponding To NAICS
 ```{r}
 ggplot() +
   geom_polygon(data = state, aes(x = long, y = lat, group = group), fill = NA, color = "black") +
-  geom_point(data = valid_locations, aes(x = Longitude, y = Latitude, color = PRIMARY.NAICS.DESCRIPTION), size = 1) +
+  geom_point(data = valid_locations, aes(x = Longitude, y = Latitude, color = sector), size = 1) +
   coord_fixed(1.3) +  # Set aspect ratio
   ggtitle("Business Locations In Continental United States") +
   labs(color = "State") +
   theme(legend.position = "none")
 ```
-### Top 10 States by Number of Businesses (According to Dataset) (Brian Xicon)
+
+Visually speaking, the distribution of active businesses alludes to the relative economic vitality of each region in the United States. More precisely speaking, high density population centers will be able to, expectedly, attract and harbor greater commercial activity. These are regions such as the East Coast, California, or Texas; as well as large cities such as Chicago, Atlanta, Denver, Seattle, Phoenix, etc.
+
+Let's focus our attention on a select subset of sectors:
+
+* Professional, Scientific, and Technical Services
+* Real Estate and Rental and Leasing
+* Retail Trade
+* Construction
+
+```{r}
+print(ggplot() +
+		geom_polygon(data = state, aes(x = long, y = lat, group = group), fill = NA, color = "black") +
+		geom_point(data = valid_locations %>% filter(sector == "Professional, Scientific, and Technical Services"), aes(x = Longitude, y = Latitude), size = 1) +
+		coord_fixed(1.3) +
+		ggtitle("Business Locations (Professional, Scientific, and Technical Services)") +
+		labs(color = "State") +
+		theme(legend.position = "none"))
+
+
+print(ggplot() +
+		geom_polygon(data = state, aes(x = long, y = lat, group = group), fill = NA, color = "black") +
+		geom_point(data = valid_locations %>% filter(sector == "Real Estate and Rental and Leasing"), aes(x = Longitude, y = Latitude), size = 1) +
+		coord_fixed(1.3) +
+		ggtitle("Business Locations (Real Estate and Rental and Leasing)") +
+		labs(color = "State") +
+		theme(legend.position = "none"))
+
+print(ggplot() +
+		geom_polygon(data = state, aes(x = long, y = lat, group = group), fill = NA, color = "black") +
+		geom_point(data = valid_locations %>% filter(sector == "Retail Trade"), aes(x = Longitude, y = Latitude), size = 1) +
+		coord_fixed(1.3) +
+		ggtitle("Business Locations (Retail Trade)") +
+		labs(color = "State") +
+		theme(legend.position = "none"))
+
+print(ggplot() +
+		geom_polygon(data = state, aes(x = long, y = lat, group = group), fill = NA, color = "black") +
+		geom_point(data = valid_locations %>% filter(sector == "Construction"), aes(x = Longitude, y = Latitude), size = 1) +
+		coord_fixed(1.3) +
+		ggtitle("Business Locations (Construction)") +
+		labs(color = "State") +
+		theme(legend.position = "none"))
+```
+
+Examining each sector reveals a wide variety of different intriguing possible hypotheses that we may explore, for example:
+
+* Businesses categorized under "Professional, scientific, and technical services" appear to be more evenly spread out geographically, as opposed to the more urban-centric concentration of the other sectors. This may suggest that locational/geographical advantage isn't as large of a contributing factor to a business' success compared to other industries. This might be due to a lesser need for logistics, market accessibility, or proximity to customers.
+* On the other side of the coin, retail businesses greatly benefit from locational advantage, for the exact opposite reasons stated above. This may explain why they concentrate more to urban metropolises compared to other sectors.
+* On a different note, the distribution for construction related businesses seem to be atypical compared to other sectors. While they stay close to urban centers, they don't concentrate at the exact center, instead preferring to "orbit" them. This could be due to regulatory factors, logistics, etc.
+
+While there are a lot of hypotheses that we can come up with. This set of maps alone is nowhere near sufficient to make any claims or assumptions.
+
+### Top 10 States by Number of Businesses (According to Dataset)
 ```{r}
 state_business_counts <- valid_locations %>%
   group_by(state_name) %>%
@@ -228,16 +378,18 @@ ggplot(top_states_no_cali, aes(x = reorder(state_name, business_count), y = busi
   ylab("Number of Businesses") +
   ggtitle("Top 10 States by Number of Businesses") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-#Since this is a California based dataset it will be easy to notice just how many more companies California has compared to the other states. The bar graph shown shows just how large of a margin it is to go from 1st place (California) to 2nd place (New York). Removing California from the bar graph we can then see the margins are much less drastic compared to the other states.
 ```
 
-### Stacked Barchart Comparing NAICS As Well (Brian Xicon)
+Since this is a California based dataset it will be easy to notice just how many more companies California has compared to the other states. The bar graph shown shows just how large of a margin it is to go from 1st place (California) to 2nd place (New York). Removing California from the bar graph we can then see the margins are much less drastic compared to the other states.
+
+Again, the number of businesses unsurprisingly correlate strongly with the economic strength and vitality of the region, with economic centers like New York and Texas accounting for a large number of businesses out of the total.
+
+### Stacked Barchart Comparing NAICS As Well
 ```{r}
 #Count businesses by state and NAICS, excluding California
 state_naics_counts <- valid_locations %>%
   filter(state_name != "California") %>%
-  group_by(state_name, PRIMARY.NAICS.DESCRIPTION) %>%
+  group_by(state_name, sector) %>%
   summarise(business_count = n()) %>%
   ungroup()
 
@@ -255,15 +407,15 @@ top_state_naics_counts <- state_naics_counts %>%
 
 #Find top 10 NAICS descriptions
 top_naics <- top_state_naics_counts %>%
-  group_by(PRIMARY.NAICS.DESCRIPTION) %>%
+  group_by(sector) %>%
   summarise(count = n()) %>%
   arrange(desc(count)) %>%
   top_n(10, count) %>%
-  pull(PRIMARY.NAICS.DESCRIPTION)
+  pull(sector)
 
 #Filter for top NAICS descriptions
 final_data <- top_state_naics_counts %>%
-  filter(PRIMARY.NAICS.DESCRIPTION %in% top_naics)
+  filter(sector %in% top_naics)
 
 #Make distinct palette
 my_palette <- c("#e6194B", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4",
@@ -272,7 +424,7 @@ my_palette <- c("#e6194B", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4"
 				"#000075", "#808080", "#000000", "#ffd700", "#4b0082", "#800080")
 
 #Plot stacked barchart
-ggplot(final_data, aes(x = reorder(state_name, business_count), y = business_count, fill = PRIMARY.NAICS.DESCRIPTION)) +
+ggplot(final_data, aes(x = reorder(state_name, business_count), y = business_count, fill = sector)) +
   geom_bar(stat = "identity") +
   scale_fill_manual(values = my_palette, name = "NAICS Description") +
   xlab("State") +
@@ -281,8 +433,12 @@ ggplot(final_data, aes(x = reorder(state_name, business_count), y = business_cou
   theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "bottom")
 ```
 
+The distribution of businesses differentiated by sector mostly stays the same between states, except for some noteworthy observations:
 
-4. How is the distribution of different business types evolving over time within each council district? Are new industries emerging in specific districts? (Dev Desai)
+* The entertainment sector is disproportionately more developed in New York, *vastly* overshadowing the entertainment sector in other states in terms of size.
+* The construction sector is larger in Arizona and Texas compared to other states in terms of proportion, although to a lesser extent compared to the previous observation.
+
+4. How is the distribution of different business types evolving over time within each council district? Are new industries emerging in specific districts?
 ```{r}
 # Filter out rows with missing or zero council district values
 businesses <- businesses %>%
@@ -294,7 +450,7 @@ businesses <- businesses %>%
 
 # Count the number of each type of business by year and council district
 business_trends_district <- businesses %>%
-  group_by(Year, COUNCIL.DISTRICT, Business_Type = PRIMARY.NAICS.DESCRIPTION) %>%
+  group_by(Year, COUNCIL.DISTRICT, Business_Type = sector) %>%
   summarise(Count = n(), .groups = 'drop') %>%
   ungroup() %>%
   arrange(Year)
@@ -336,52 +492,4 @@ plot_district <- ggplot(business_trends_district, aes(x = Year, y = Count, color
 
 print(plot_district)
 
-```
-
-### Deeper investigation of trends with respect to business categorization (Thanh Mai)
-
-https://www.census.gov/naics/
->The North American Industry Classification System (NAICS) is the standard used by Federal statistical agencies in classifying business establishments for the purpose of collecting, analyzing, and publishing statistical data related to the U.S. business economy.
-
-Further analysis and understanding of business types can reveal insightful patterns in consumer behavior, economic trends, technological development, etc. The NAICS code is given by the `NAICS` column in our dataset, in which there are nearly 300 unique categories of businesses:
-```{r}
-length(unique(businesses$NAICS))
-```
-
-This is too many to do visualize and analysis on, fortunately, the first two digits of the code tells us which one of the 21 broader categories (industry sectors or "sectors") this code belongs to. This information can be found at https://www.census.gov/naics/?58967?yearbck=2022. By using the web browser's developer tools, we can inspect the network activity and see that a JSON containing the table is served from https://www.census.gov/naics/resources/js/data/naics-sector-descriptions.json. We can fetch from this endpoint and load it into R:
-```{r}
-response <- GET("https://www.census.gov/naics/resources/js/data/naics-sector-descriptions.json")
-content <- content(response, "text", encoding = "UTF-8")
-json_data <- fromJSON(content)
-
-table_rows <- json_data$naicsRef$table$tableRow
-
-sector_map <- setNames(sapply(table_rows, function(row) row$sectorDescription),
-					   sapply(table_rows, function(row) row$sectorCode))
-
-sector_map
-```
-
-Currently, the raw data has ranges (e.g. 31-33) in them. We can rectify this by finding ranges, then replacing them with multiple entries for each number in the range.
-```{r}
-sector_map_tmp <- list()
-for (code in names(sector_map)) {
-	if (grepl("-", code)) {
-		range <- as.numeric(unlist(strsplit(code, "-")))
-		for (i in range[1]:range[2]) {
-			sector_map_tmp[[i]] <- sector_map[[code]]
-		}
-	} else {
-		sector_map_tmp[[as.integer(code)]] <- sector_map[[code]]
-	}
-}
-
-sector_map <- as.list(sector_map_tmp)
-```
-
-Then, we can now categorize businesses by their broader `sector`.
-```{r}
-businesses$sector <- sapply(businesses$NAICS, function(x) sector_map[x])
-# Get counts
-table(businesses$sector)
 ```
